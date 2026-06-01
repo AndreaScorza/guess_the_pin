@@ -1,0 +1,13 @@
+[project]
+name = "guess-the-pin"
+version = "0.1.0"
+description = "Solver for guessthepin.com"
+requires-python = ">=3.11"
+dependencies = [
+    "cloudscraper>=1.2.71",
+    "requests>=2.31.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+solve = "solver:main"
