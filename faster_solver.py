@@ -3,11 +3,13 @@
 Solver for https://www.guessthepin.com/
 - 4-digit PIN (0000-9999), POST to /prg.php
 - Cloudflare bypass via cloudscraper
-- Concurrent requests via ThreadPoolExecutor
+- Concurrent requests via ThreadPoolExecutor (default 100 workers, ~90 req/s sweet spot)
+- No progress persistence — full sweep completes in ~2 min
 """
 
 import argparse
 import threading
+import time
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -17,7 +19,7 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeEl
 
 POST_URL = "https://www.guessthepin.com/prg.php"
 HOME_URL = "https://www.guessthepin.com/"
-DEFAULT_WORKERS = 500
+DEFAULT_WORKERS = 100
 
 console = Console()
 thread_local = threading.local()
@@ -114,6 +116,7 @@ def main() -> None:
     console.print()
 
     completed = 0
+    start = time.monotonic()
 
     with Progress(
         SpinnerColumn(),
@@ -126,34 +129,38 @@ def main() -> None:
     ) as progress:
         task = progress.add_task("Guessing…", total=len(pins))
 
+        executor = ThreadPoolExecutor(max_workers=args.workers)
         try:
-            with ThreadPoolExecutor(max_workers=args.workers) as executor:
-                futures = {executor.submit(worker_task, pin): pin for pin in pins}
+            futures = {executor.submit(worker_task, pin): pin for pin in pins}
 
-                for future in as_completed(futures):
-                    try:
-                        win, pin, status = future.result()
-                    except Exception as e:
-                        pin = futures[future]
-                        console.print(f"[red]Error on {pin}: {e}[/]")
-                        continue
+            for future in as_completed(futures):
+                try:
+                    win, pin, status = future.result()
+                except Exception as e:
+                    pin = futures[future]
+                    console.print(f"[red]Error on {pin}: {e}[/]")
+                    continue
 
-                    if status == -1:
-                        progress.update(task, advance=1)
-                        continue
+                if status == -1:
+                    progress.update(task, advance=1)
+                    continue
 
-                    completed += 1
+                completed += 1
 
-                    if win:
-                        win_event.set()
-                        progress.stop()
-                        console.print(f"\n[bold green]WIN! The PIN is: {pin}[/]")
-                        console.print(f"Solved after {completed} guesses.")
-                        return
+                if win:
+                    win_event.set()
+                    progress.stop()
+                    console.print(f"\n[bold green]WIN! The PIN is: {pin}[/]")
+                    console.print(f"Solved after {completed} guesses.")
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    return
 
-                    progress.update(task, advance=1, description=f"Tried {pin} ({status})")
+                rate = completed / max(time.monotonic() - start, 0.001)
+                progress.update(task, advance=1, description=f"{rate:.0f} req/s | last {pin} ({status})")
 
         except KeyboardInterrupt:
+            win_event.set()
+            executor.shutdown(wait=False, cancel_futures=True)
             console.print("\n[yellow]Interrupted.[/]")
             sys.exit(1)
 
