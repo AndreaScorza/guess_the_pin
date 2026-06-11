@@ -109,7 +109,7 @@ def main() -> None:
                         help=f"concurrent workers (default: {DEFAULT_WORKERS})")
     args = parser.parse_args()
 
-    pins = [f"{i:04d}" for i in range(10000)]
+    pins = [f"{i:04d}" for i in range(9999, -1, -1)]
 
     console.print(f"[bold]Guess-the-PIN solver[/] (workers: {args.workers})")
     console.print(f"Endpoint: {POST_URL}")
