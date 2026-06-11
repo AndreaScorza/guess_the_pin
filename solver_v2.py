@@ -138,7 +138,7 @@ def main() -> None:
                     win, pin, status = future.result()
                 except Exception as e:
                     pin = futures[future]
-                    console.print(f"[red]Error on {pin}: {e}[/]")
+                    progress.log(f"[red]Error on {pin}: {e}[/]")
                     continue
 
                 if status == -1:
