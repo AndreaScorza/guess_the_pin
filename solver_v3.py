@@ -8,10 +8,12 @@ Solver for https://www.guessthepin.com/
 """
 
 import argparse
+import json
 import multiprocessing as mp
 import threading
 import time
 import sys
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import cloudscraper
@@ -22,8 +24,30 @@ POST_URL = "https://www.guessthepin.com/prg.php"
 HOME_URL = "https://www.guessthepin.com/"
 DEFAULT_PROCESSES = 4
 DEFAULT_WORKERS = 50
+RESULTS_FILE = "results.json"
 
 console = Console()
+
+
+def save_result(pin: str, guesses: int, elapsed: float, rate: float, processes: int, workers: int) -> None:
+    try:
+        with open(RESULTS_FILE) as f:
+            records = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        records = []
+
+    records.append({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "pin": pin,
+        "guesses": guesses,
+        "elapsed_s": round(elapsed, 2),
+        "req_per_s": round(rate, 1),
+        "processes": processes,
+        "workers": workers,
+    })
+
+    with open(RESULTS_FILE, "w") as f:
+        json.dump(records, f, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -201,8 +225,12 @@ def main() -> None:
                     progress.stop()
                     for p in processes:
                         p.terminate()
+                    elapsed = time.monotonic() - start
+                    rate = completed / max(elapsed, 0.001)
+                    save_result(pin, completed, elapsed, rate, n, args.workers)
                     console.print(f"\n[bold green]WIN! The PIN is: {pin}[/]")
-                    console.print(f"Solved after {completed} guesses.")
+                    console.print(f"Solved after {completed} guesses in {elapsed:.1f}s ({rate:.0f} req/s).")
+                    console.print(f"Result saved to [dim]{RESULTS_FILE}[/]")
                     return
 
                 elif kind == "done":
