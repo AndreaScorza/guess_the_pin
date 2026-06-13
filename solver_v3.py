@@ -177,7 +177,7 @@ def main() -> None:
     total_workers = n * args.workers
     console.print(
         f"[bold]Guess-the-PIN solver[/] "
-        f"(processes: {n}, workers/process: {args.workers}, total: {total_workers})"
+        f"(processes: {n}, workers/process: {args.workers}, total: {total_workers}, cores: {mp.cpu_count()})"
     )
     console.print(f"Endpoint: {POST_URL}")
     console.print()

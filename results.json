@@ -1,0 +1,20 @@
+[
+  {
+    "timestamp": "2026-06-13T20:33:02.054966+00:00",
+    "pin": "5779",
+    "guesses": 1180,
+    "elapsed_s": 14.32,
+    "req_per_s": 82.4,
+    "processes": 10,
+    "workers": 80
+  },
+  {
+    "timestamp": "2026-06-13T20:46:18.161356+00:00",
+    "pin": "9905",
+    "guesses": 259,
+    "elapsed_s": 5.43,
+    "req_per_s": 47.7,
+    "processes": 10,
+    "workers": 80
+  }
+]
