@@ -24,8 +24,6 @@ DEFAULT_PROCESSES = 4
 DEFAULT_WORKERS = 50
 
 console = Console()
-thread_local = threading.local()
-win_event = threading.Event()
 
 
 # ---------------------------------------------------------------------------
@@ -55,15 +53,15 @@ def make_scraper() -> cloudscraper.CloudScraper:
     )
 
 
-def get_scraper() -> cloudscraper.CloudScraper:
-    if not hasattr(thread_local, "scraper"):
+def get_scraper(tl: threading.local) -> cloudscraper.CloudScraper:
+    if not hasattr(tl, "scraper"):
         s = make_scraper()
         try:
             s.get(HOME_URL, timeout=10)
         except Exception:
             pass
-        thread_local.scraper = s
-    return thread_local.scraper
+        tl.scraper = s
+    return tl.scraper
 
 
 def try_pin(scraper: cloudscraper.CloudScraper, pin: str) -> tuple[bool, int]:
@@ -78,27 +76,58 @@ def try_pin(scraper: cloudscraper.CloudScraper, pin: str) -> tuple[bool, int]:
 
 
 # ---------------------------------------------------------------------------
-# Worker
+# Process worker (runs inside each child process)
 # ---------------------------------------------------------------------------
 
-def worker_task(pin: str) -> tuple[bool, str, int]:
-    """Try one PIN. Returns (is_win, pin, http_status) or status=-1 if skipped."""
-    if win_event.is_set():
-        return False, pin, -1
-    scraper = get_scraper()
-    for attempt in range(2):
-        try:
-            win, status = try_pin(scraper, pin)
-            return win, pin, status
-        except Exception:
-            thread_local.scraper = make_scraper()
+def process_worker(pins_chunk: list, win_flag, result_queue: mp.Queue, n_workers: int) -> None:
+    tl = threading.local()
+    local_win = threading.Event()
+
+    def task(pin: str) -> tuple[bool, str, int]:
+        if win_flag.value or local_win.is_set():
+            return False, pin, -1
+        scraper = get_scraper(tl)
+        for attempt in range(2):
             try:
-                thread_local.scraper.get(HOME_URL, timeout=10)
+                win, status = try_pin(scraper, pin)
+                return win, pin, status
             except Exception:
-                pass
-            scraper = thread_local.scraper
-            if attempt == 1:
-                raise
+                tl.scraper = make_scraper()
+                try:
+                    tl.scraper.get(HOME_URL, timeout=10)
+                except Exception:
+                    pass
+                scraper = tl.scraper
+                if attempt == 1:
+                    return False, pin, -1
+
+    with ThreadPoolExecutor(max_workers=n_workers) as ex:
+        futures = {ex.submit(task, p): p for p in pins_chunk}
+        try:
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    if result is None:
+                        continue
+                    win, pin, status = result
+                except Exception as e:
+                    result_queue.put(("error", futures[future], str(e)))
+                    continue
+
+                if status == -1:
+                    result_queue.put(("skip", pin))
+                    continue
+
+                if win:
+                    win_flag.value = 1
+                    local_win.set()
+                    result_queue.put(("win", pin))
+                    ex.shutdown(wait=False, cancel_futures=True)
+                    return
+
+                result_queue.put(("done", pin, status))
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -107,15 +136,38 @@ def worker_task(pin: str) -> tuple[bool, str, int]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Guess-the-PIN solver")
+    parser.add_argument("--processes", type=int, default=DEFAULT_PROCESSES,
+                        help=f"number of processes (default: {DEFAULT_PROCESSES})")
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS,
-                        help=f"concurrent workers (default: {DEFAULT_WORKERS})")
+                        help=f"threads per process (default: {DEFAULT_WORKERS})")
     args = parser.parse_args()
 
     pins = [f"{i:04d}" for i in range(9999, -1, -1)]
+    n = args.processes
+    chunk_size = (len(pins) + n - 1) // n
+    chunks = [pins[i * chunk_size : (i + 1) * chunk_size] for i in range(n)]
 
-    console.print(f"[bold]Guess-the-PIN solver[/] (workers: {args.workers})")
+    win_flag = mp.Value("b", 0)
+    result_queue: mp.Queue = mp.Queue()
+
+    total_workers = n * args.workers
+    console.print(
+        f"[bold]Guess-the-PIN solver[/] "
+        f"(processes: {n}, workers/process: {args.workers}, total: {total_workers})"
+    )
     console.print(f"Endpoint: {POST_URL}")
     console.print()
+
+    processes = [
+        mp.Process(
+            target=process_worker,
+            args=(chunk, win_flag, result_queue, args.workers),
+            daemon=True,
+        )
+        for chunk in chunks
+    ]
+    for p in processes:
+        p.start()
 
     completed = 0
     start = time.monotonic()
@@ -129,42 +181,57 @@ def main() -> None:
         console=console,
         refresh_per_second=4,
     ) as progress:
-        task = progress.add_task("Guessing…", total=len(pins))
+        task_id = progress.add_task("Guessing…", total=len(pins))
 
-        executor = ThreadPoolExecutor(max_workers=args.workers)
         try:
-            futures = {executor.submit(worker_task, pin): pin for pin in pins}
+            while completed < len(pins):
+                if not any(p.is_alive() for p in processes) and result_queue.empty():
+                    break
 
-            for future in as_completed(futures):
                 try:
-                    win, pin, status = future.result()
-                except Exception as e:
-                    pin = futures[future]
-                    progress.log(f"[red]Error on {pin}: {e}[/]")
+                    item = result_queue.get(timeout=0.5)
+                except Exception:
                     continue
 
-                if status == -1:
-                    progress.update(task, advance=1)
-                    continue
+                kind = item[0]
 
-                completed += 1
-
-                if win:
-                    win_event.set()
+                if kind == "win":
+                    _, pin = item
+                    win_flag.value = 1
                     progress.stop()
+                    for p in processes:
+                        p.terminate()
                     console.print(f"\n[bold green]WIN! The PIN is: {pin}[/]")
                     console.print(f"Solved after {completed} guesses.")
-                    executor.shutdown(wait=False, cancel_futures=True)
                     return
 
-                rate = completed / max(time.monotonic() - start, 0.001)
-                progress.update(task, advance=1, description=f"{rate:.0f} req/s | last {pin} ({status})")
+                elif kind == "done":
+                    _, pin, status = item
+                    completed += 1
+                    rate = completed / max(time.monotonic() - start, 0.001)
+                    progress.update(
+                        task_id,
+                        advance=1,
+                        description=f"{rate:.0f} req/s | last {pin} ({status})",
+                    )
+
+                elif kind == "skip":
+                    completed += 1
+                    progress.update(task_id, advance=1)
+
+                elif kind == "error":
+                    _, pin, err = item
+                    progress.log(f"[red]Error on {pin}: {err}[/]")
 
         except KeyboardInterrupt:
-            win_event.set()
-            executor.shutdown(wait=False, cancel_futures=True)
+            win_flag.value = 1
+            for p in processes:
+                p.terminate()
             console.print("\n[yellow]Interrupted.[/]")
             sys.exit(1)
+
+    for p in processes:
+        p.join(timeout=2)
 
     console.print("[yellow]Finished all PINs without a win – the PIN likely changed mid-run.[/]")
 
