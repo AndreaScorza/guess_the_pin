@@ -1,0 +1,110 @@
+[
+  {
+    "timestamp": "2026-06-13T20:33:02.054966+00:00",
+    "pin": "5779",
+    "guesses": 1180,
+    "elapsed_s": 14.32,
+    "req_per_s": 82.4,
+    "processes": 10,
+    "workers": 80
+  },
+  {
+    "timestamp": "2026-06-13T20:46:18.161356+00:00",
+    "pin": "9905",
+    "guesses": 259,
+    "elapsed_s": 5.43,
+    "req_per_s": 47.7,
+    "processes": 10,
+    "workers": 80
+  },
+  {
+    "timestamp": "2026-06-13T20:54:42.349823+00:00",
+    "pin": "7901",
+    "guesses": 2372,
+    "elapsed_s": 24.41,
+    "req_per_s": 97.2,
+    "processes": 6,
+    "workers": 80
+  },
+  {
+    "timestamp": "2026-06-13T20:55:13.226586+00:00",
+    "pin": "8297",
+    "guesses": 2364,
+    "elapsed_s": 30.6,
+    "req_per_s": 77.3,
+    "processes": 6,
+    "workers": 80
+  },
+  {
+    "timestamp": "2026-06-13T20:56:00.914463+00:00",
+    "pin": "6321",
+    "guesses": 2265,
+    "elapsed_s": 26.2,
+    "req_per_s": 86.5,
+    "processes": 6,
+    "workers": 80
+  },
+  {
+    "timestamp": "2026-06-13T20:57:08.225210+00:00",
+    "pin": "4060",
+    "guesses": 5331,
+    "elapsed_s": 67.04,
+    "req_per_s": 79.5,
+    "processes": 6,
+    "workers": 80
+  },
+  {
+    "timestamp": "2026-06-13T20:58:22.994613+00:00",
+    "pin": "2525",
+    "guesses": 4661,
+    "elapsed_s": 74.5,
+    "req_per_s": 62.6,
+    "processes": 6,
+    "workers": 80
+  },
+  {
+    "timestamp": "2026-06-13T20:59:18.160916+00:00",
+    "pin": "9403",
+    "guesses": 4225,
+    "elapsed_s": 54.94,
+    "req_per_s": 76.9,
+    "processes": 6,
+    "workers": 80
+  },
+  {
+    "timestamp": "2026-06-13T21:01:08.825637+00:00",
+    "pin": "0411",
+    "guesses": 7311,
+    "elapsed_s": 110.37,
+    "req_per_s": 66.2,
+    "processes": 6,
+    "workers": 80
+  },
+  {
+    "timestamp": "2026-06-13T21:02:44.513957+00:00",
+    "pin": "8790",
+    "guesses": 6652,
+    "elapsed_s": 95.4,
+    "req_per_s": 69.7,
+    "processes": 6,
+    "workers": 80
+  },
+  {
+    "timestamp": "2026-06-13T21:03:09.315954+00:00",
+    "pin": "3036",
+    "guesses": 1679,
+    "elapsed_s": 24.56,
+    "req_per_s": 68.4,
+    "processes": 6,
+    "workers": 80
+  },
+  {
+    "timestamp": "2026-06-13T21:04:25.871383+00:00",
+    "pin": "0792",
+    "guesses": 5286,
+    "elapsed_s": 76.28,
+    "req_per_s": 69.3,
+    "processes": 6,
+    "workers": 80
+  }
+]
